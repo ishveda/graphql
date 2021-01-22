@@ -27,6 +27,11 @@ type (
 	ResolveFieldFinishFunc func(interface{}, error)
 	// resolveFieldFinishFuncHandler calls the resolveFieldFinishFns for all the extensions
 	resolveFieldFinishFuncHandler func(interface{}, error) []gqlerrors.FormattedError
+
+	// ResolveFieldFinishFunc is called with the result of the ResolveFn and the error it returned
+	ResolveFieldCompletedFunc func(data interface{}, err error) (interface{}, error)
+	// resolveFieldFinishFuncHandler calls the resolveFieldFinishFns for all the extensions
+	resolveFieldCompletedFuncHandler func(data interface{}, err error) (interface{}, []gqlerrors.FormattedError)
 )
 
 // Extension is an interface for extensions in graphql
@@ -48,6 +53,9 @@ type Extension interface {
 
 	// ResolveFieldDidStart notifies about the start of the resolving of a field
 	ResolveFieldDidStart(context.Context, *ResolveInfo) (context.Context, ResolveFieldFinishFunc)
+
+	// ResolveFieldDidStart notifies about the completion of the resolving of a field
+	ResolveFieldCompleted(context.Context, *ResolveInfo) (context.Context, ResolveFieldCompletedFunc)
 
 	// HasResult returns if the extension wants to add data to the result
 	HasResult() bool
@@ -227,6 +235,48 @@ func handleExtensionsResolveFieldDidStart(exts []Extension, p *executionContext,
 			}()
 		}
 		return extErrs
+	}
+}
+
+// handleResolveFieldDidStart handles the notification of the extensions about the start of a resolve function
+func handleExtensionsResolveFieldCompleted(exts []Extension, p *executionContext, i *ResolveInfo) ([]gqlerrors.FormattedError, resolveFieldCompletedFuncHandler) {
+	fs := map[string]ResolveFieldCompletedFunc{}
+	errs := gqlerrors.FormattedErrors{}
+	for _, ext := range p.Schema.extensions {
+		var (
+			ctx      context.Context
+			finishFn ResolveFieldCompletedFunc
+		)
+		// catch panic from an extension's resolveFieldDidStart function
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					errs = append(errs, gqlerrors.FormatError(fmt.Errorf("%s.ResolveFieldDidStart: %v", ext.Name(), r.(error))))
+				}
+			}()
+			ctx, finishFn = ext.ResolveFieldCompleted(p.Context, i)
+			// update context
+			p.Context = ctx
+			fs[ext.Name()] = finishFn
+		}()
+	}
+	return errs, func(data interface{}, err error) (interface{}, []gqlerrors.FormattedError) {
+		extErrs := gqlerrors.FormattedErrors{}
+		for name, finishFn := range fs {
+			func() {
+				// catch panic from a finishFn
+				defer func() {
+					if r := recover(); r != nil {
+						extErrs = append(extErrs, gqlerrors.FormatError(fmt.Errorf("%s.ResolveFieldFinishFunc: %v", name, r.(error))))
+					}
+				}()
+				data, err = finishFn(data, err)
+				if err != nil {
+					extErrs = append(extErrs, gqlerrors.FormatError(fmt.Errorf("%s.ResolveFieldFinishFunc: %v", name, err)))
+				}
+			}()
+		}
+		return data, extErrs
 	}
 }
 

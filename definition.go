@@ -597,6 +597,7 @@ type ResolveInfo struct {
 	RootValue      interface{}
 	Operation      ast.Definition
 	VariableValues map[string]interface{}
+	ArgumentValues map[string]interface{}
 }
 
 type Fields map[string]*Field

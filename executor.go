@@ -637,6 +637,7 @@ func resolveField(eCtx *executionContext, parentType *Object, source interface{}
 		RootValue:      eCtx.Root,
 		Operation:      eCtx.Operation,
 		VariableValues: eCtx.VariableValues,
+		ArgumentValues: args,
 	}
 
 	var resolveFnError error
@@ -663,7 +664,18 @@ func resolveField(eCtx *executionContext, parentType *Object, source interface{}
 	}
 
 	completed := completeValueCatchingError(eCtx, returnType, fieldASTs, info, path, result)
-	return completed, resultState
+
+	extErrs, resolveFieldCompletedFn := handleExtensionsResolveFieldCompleted(eCtx.Schema.extensions, eCtx, &info)
+	if len(extErrs) != 0 {
+		eCtx.Errors = append(eCtx.Errors, extErrs...)
+	}
+
+	modified, extErrs := resolveFieldCompletedFn(completed, resolveFnError)
+	if len(extErrs) != 0 {
+		eCtx.Errors = append(eCtx.Errors, extErrs...)
+		return completed, resultState
+	}
+	return modified, resultState
 }
 
 func completeValueCatchingError(eCtx *executionContext, returnType Type, fieldASTs []*ast.Field, info ResolveInfo, path *ResponsePath, result interface{}) (completed interface{}) {
