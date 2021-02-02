@@ -23,8 +23,6 @@ type Plugin interface {
 	Execute(ctx context.Context, pointer string, data interface{}, args map[string]interface{}) (interface{}, error)
 }
 
-type ElementPath string
-
 func handlePluginsResolveFieldFinished(eCtx *executionContext, info ResolveInfo) {
 	for _, p := range info.Schema.plugins {
 		if p.IsCompatible(eCtx.Context, info) {
