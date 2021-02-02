@@ -20,15 +20,14 @@ type Plugin interface {
 	// IsCompatible tests whether current field is compatible with the plugin
 	IsCompatible(ctx context.Context, i ResolveInfo) bool
 	// Execute runs plugin processing on the data accessed by provided json pointer
-	Execute(ctx context.Context, pointer string, data interface{}, args map[string]interface{}) (interface{}, error)
+	Execute(ctx context.Context, pointer string, data interface{}, i ResolveInfo) (interface{}, error)
 }
 
 func handlePluginsResolveFieldFinished(eCtx *executionContext, info ResolveInfo) {
 	for _, p := range info.Schema.plugins {
 		if p.IsCompatible(eCtx.Context, info) {
 			eCtx.PluginExecRegistry.Register(PluginExecutable{
-				path:   info.Path,
-				args:   info.ArgumentValues,
+				info:   info,
 				plugin: p,
 			})
 		}
@@ -46,15 +45,14 @@ func NewPluginExecRegistry() *PluginExecutionRegistry {
 }
 
 type PluginExecutable struct {
-	path   *ResponsePath
-	args   map[string]interface{}
+	info   ResolveInfo
 	plugin Plugin
 }
 
 func (pr *PluginExecutionRegistry) Register(pe PluginExecutable) {
-	plugins := pr.plugins[pe.path]
+	plugins := pr.plugins[pe.info.Path]
 	plugins = append(plugins, pe)
-	pr.plugins[pe.path] = plugins
+	pr.plugins[pe.info.Path] = plugins
 }
 
 func (pr *PluginExecutionRegistry) Execute(ctx context.Context, data interface{}) (interface{}, []gqlerrors.FormattedError) {
@@ -63,7 +61,7 @@ func (pr *PluginExecutionRegistry) Execute(ctx context.Context, data interface{}
 	for info, plugins := range pr.plugins {
 		elPath := constructPointer(info.AsArray())
 		for _, p := range plugins {
-			data, err = p.plugin.Execute(ctx, elPath, data, p.args)
+			data, err = p.plugin.Execute(ctx, elPath, data, p.info)
 			if err != nil {
 				plgErrs = append(plgErrs, gqlerrors.FormatError(
 					fmt.Errorf("%s.PluginExecution: %v", p.plugin.Name(), err)))
