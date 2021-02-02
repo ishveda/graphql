@@ -7,6 +7,7 @@ type SchemaConfig struct {
 	Types        []Type
 	Directives   []*Directive
 	Extensions   []Extension
+	Plugins      []Plugin
 }
 
 type TypeMap map[string]Type
@@ -41,6 +42,7 @@ type Schema struct {
 	implementations  map[string][]*Object
 	possibleTypeMap  map[string]map[string]bool
 	extensions       []Extension
+	plugins          []Plugin
 }
 
 func NewSchema(config SchemaConfig) (Schema, error) {
@@ -140,6 +142,11 @@ func NewSchema(config SchemaConfig) (Schema, error) {
 	// Add extensions from config
 	if len(config.Extensions) != 0 {
 		schema.extensions = config.Extensions
+	}
+
+	// Add plugins from config
+	if len(config.Plugins) != 0 {
+		schema.plugins = config.Plugins
 	}
 
 	return schema, nil
@@ -265,6 +272,11 @@ func (gq *Schema) IsPossibleType(abstractType Abstract, possibleType *Object) bo
 // AddExtensions can be used to add additional extensions to the schema
 func (gq *Schema) AddExtensions(e ...Extension) {
 	gq.extensions = append(gq.extensions, e...)
+}
+
+// AddPlugins can be used to add additional plugins to the schema
+func (gq *Schema) AddPlugins(p ...Plugin) {
+	gq.plugins = append(gq.plugins, p...)
 }
 
 // map-reduce

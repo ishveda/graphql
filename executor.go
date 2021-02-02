@@ -103,13 +103,14 @@ type buildExecutionCtxParams struct {
 }
 
 type executionContext struct {
-	Schema         Schema
-	Fragments      map[string]ast.Definition
-	Root           interface{}
-	Operation      ast.Definition
-	VariableValues map[string]interface{}
-	Errors         []gqlerrors.FormattedError
-	Context        context.Context
+	Schema             Schema
+	Fragments          map[string]ast.Definition
+	Root               interface{}
+	Operation          ast.Definition
+	VariableValues     map[string]interface{}
+	Errors             []gqlerrors.FormattedError
+	Context            context.Context
+	PluginExecRegistry *PluginExecutionRegistry
 }
 
 func buildExecutionContext(p buildExecutionCtxParams) (*executionContext, error) {
@@ -155,6 +156,7 @@ func buildExecutionContext(p buildExecutionCtxParams) (*executionContext, error)
 	eCtx.Operation = operation
 	eCtx.VariableValues = variableValues
 	eCtx.Context = p.Context
+	eCtx.PluginExecRegistry = NewPluginExecRegistry()
 	return eCtx, nil
 }
 
@@ -279,8 +281,13 @@ func executeFields(p executeFieldsParams) *Result {
 
 	dethunkMapWithBreadthFirstTraversal(finalResults)
 
+	finalModified, errs := p.ExecutionContext.PluginExecRegistry.Execute(p.ExecutionContext.Context, finalResults)
+	if len(errs) > 0 {
+		p.ExecutionContext.Errors = append(p.ExecutionContext.Errors, errs...)
+	}
+
 	return &Result{
-		Data:   finalResults,
+		Data:   finalModified,
 		Errors: p.ExecutionContext.Errors,
 	}
 }
@@ -637,7 +644,10 @@ func resolveField(eCtx *executionContext, parentType *Object, source interface{}
 		RootValue:      eCtx.Root,
 		Operation:      eCtx.Operation,
 		VariableValues: eCtx.VariableValues,
+		ArgumentValues: args,
 	}
+
+	handlePluginsResolveFieldFinished(eCtx, info)
 
 	var resolveFnError error
 
