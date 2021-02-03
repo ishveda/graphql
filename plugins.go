@@ -35,12 +35,12 @@ func handlePluginsResolveFieldFinished(eCtx *executionContext, info ResolveInfo)
 }
 
 type PluginExecutionRegistry struct {
-	plugins map[*ResponsePath][]PluginExecutable
+	plugins []PluginExecutable
 }
 
 func NewPluginExecRegistry() *PluginExecutionRegistry {
 	return &PluginExecutionRegistry{
-		plugins: make(map[*ResponsePath][]PluginExecutable, 0),
+		plugins: make([]PluginExecutable, 0),
 	}
 }
 
@@ -50,22 +50,18 @@ type PluginExecutable struct {
 }
 
 func (pr *PluginExecutionRegistry) Register(pe PluginExecutable) {
-	plugins := pr.plugins[pe.info.Path]
-	plugins = append(plugins, pe)
-	pr.plugins[pe.info.Path] = plugins
+	pr.plugins = append(pr.plugins, pe)
 }
 
 func (pr *PluginExecutionRegistry) Execute(ctx context.Context, data interface{}) (interface{}, []gqlerrors.FormattedError) {
 	var plgErrs []gqlerrors.FormattedError
 	var err error
-	for info, plugins := range pr.plugins {
-		elPath := constructPointer(info.AsArray())
-		for _, p := range plugins {
-			data, err = p.plugin.Execute(ctx, elPath, data, p.info)
-			if err != nil {
-				plgErrs = append(plgErrs, gqlerrors.FormatError(
-					fmt.Errorf("%s.PluginExecution: %v", p.plugin.Name(), err)))
-			}
+	for _, p := range pr.plugins {
+		elPath := constructPointer(p.info.Path.AsArray())
+		data, err = p.plugin.Execute(ctx, elPath, data, p.info)
+		if err != nil {
+			plgErrs = append(plgErrs, gqlerrors.FormatError(
+				fmt.Errorf("%s.PluginExecution: %v", p.plugin.Name(), err)))
 		}
 	}
 

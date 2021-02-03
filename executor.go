@@ -647,8 +647,6 @@ func resolveField(eCtx *executionContext, parentType *Object, source interface{}
 		ArgumentValues: args,
 	}
 
-	handlePluginsResolveFieldFinished(eCtx, info)
-
 	var resolveFnError error
 
 	extErrs, resolveFieldFinishFn := handleExtensionsResolveFieldDidStart(eCtx.Schema.extensions, eCtx, &info)
@@ -673,6 +671,9 @@ func resolveField(eCtx *executionContext, parentType *Object, source interface{}
 	}
 
 	completed := completeValueCatchingError(eCtx, returnType, fieldASTs, info, path, result)
+
+	handlePluginsResolveFieldFinished(eCtx, info)
+
 	return completed, resultState
 }
 
